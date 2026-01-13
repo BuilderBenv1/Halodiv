@@ -775,8 +775,83 @@ function AdminPanel({ isAdmin, setIsAdmin, pendingSubmissions, teams, getTeamNam
         </div>
       </div>
 
+      {/* Confirmed Matches - Admin can delete */}
+      <AdminMatchList teams={teams} getTeamName={getTeamName} onDataChange={onDataChange} />
+
       {/* Quick Add */}
       <AdminQuickAdd teams={teams} onSuccess={onDataChange} />
+    </div>
+  )
+}
+
+// Admin Match List Component - for deleting confirmed matches
+function AdminMatchList({ teams, getTeamName, onDataChange }) {
+  const [matches, setMatches] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchMatches()
+  }, [])
+
+  const fetchMatches = async () => {
+    const { data } = await supabase
+      .from('matches')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(20)
+    
+    if (data) setMatches(data)
+    setLoading(false)
+  }
+
+  const deleteMatch = async (matchId) => {
+    if (!confirm('Are you sure you want to delete this match?')) return
+    
+    const { error } = await supabase
+      .from('matches')
+      .delete()
+      .eq('id', matchId)
+    
+    if (!error) {
+      fetchMatches()
+      onDataChange()
+    }
+  }
+
+  return (
+    <div className="bg-gradient-to-b from-white/5 to-transparent rounded-xl border border-white/10 overflow-hidden">
+      <div className="p-6 border-b border-white/10">
+        <h3 className="text-lg font-bold">Confirmed Matches ({matches.length})</h3>
+        <p className="text-gray-500 text-sm">Recent confirmed results - click delete to remove</p>
+      </div>
+      <div className="p-6">
+        {loading ? (
+          <p className="text-gray-500 text-center py-4">Loading...</p>
+        ) : matches.length === 0 ? (
+          <p className="text-gray-500 text-center py-4">No confirmed matches yet</p>
+        ) : (
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {matches.map(match => (
+              <div key={match.id} className="bg-black/40 rounded-lg p-3 flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <span className="text-xs text-gray-500">W{match.week}</span>
+                  <span className="font-semibold">{getTeamName(match.team1_id)}</span>
+                  <span className="font-mono bg-white/10 px-2 py-1 rounded">
+                    {match.team1_maps} - {match.team2_maps}
+                  </span>
+                  <span className="font-semibold">{getTeamName(match.team2_id)}</span>
+                </div>
+                <button 
+                  onClick={() => deleteMatch(match.id)}
+                  className="px-3 py-1 bg-red-500/20 text-red-400 rounded text-sm font-semibold hover:bg-red-500/30"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
