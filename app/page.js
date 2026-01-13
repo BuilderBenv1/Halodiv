@@ -352,32 +352,32 @@ function TeamView({ team, matches, getTeamName, onBack }) {
 // Submit Result Form Component
 function SubmitResultForm({ teams, onSubmitSuccess }) {
   const [division, setDivision] = useState(1)
-  const [team1Id, setTeam1Id] = useState('')
-  const [team2Id, setTeam2Id] = useState('')
-  const [team1Maps, setTeam1Maps] = useState(3)
-  const [team2Maps, setTeam2Maps] = useState(0)
+  const [yourTeamId, setYourTeamId] = useState('')
+  const [opponentId, setOpponentId] = useState('')
+  const [yourMaps, setYourMaps] = useState(3)
+  const [opponentMaps, setOpponentMaps] = useState(0)
   const [week, setWeek] = useState(1)
-  const [submittedBy, setSubmittedBy] = useState('')
   const [result, setResult] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
   const divTeams = teams.filter(t => t.division === division)
+  const yourTeam = teams.find(t => t.id === yourTeamId)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setResult(null)
     
-    if (!submittedBy || !team1Id || !team2Id) {
-      setResult({ status: 'error', message: 'Please fill in all fields' })
+    if (!yourTeamId || !opponentId) {
+      setResult({ status: 'error', message: 'Please select both teams' })
       return
     }
     
-    if (team1Id === team2Id) {
+    if (yourTeamId === opponentId) {
       setResult({ status: 'error', message: 'Please select two different teams' })
       return
     }
 
-    if (team1Maps + team2Maps > 5 || (team1Maps < 3 && team2Maps < 3)) {
+    if (yourMaps + opponentMaps > 5 || (yourMaps < 3 && opponentMaps < 3)) {
       setResult({ status: 'error', message: 'Invalid Bo5 score (winner needs 3 maps)' })
       return
     }
@@ -385,8 +385,15 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
     setSubmitting(true)
 
     // Create match key from sorted team IDs + week
-    const sortedIds = [team1Id, team2Id].sort()
+    const sortedIds = [yourTeamId, opponentId].sort()
     const matchKey = `${sortedIds[0]}_${sortedIds[1]}_w${week}`
+    
+    // Determine team1/team2 based on sorted order
+    const isYourTeamFirst = yourTeamId === sortedIds[0]
+    const team1Id = sortedIds[0]
+    const team2Id = sortedIds[1]
+    const team1Maps = isYourTeamFirst ? yourMaps : opponentMaps
+    const team2Maps = isYourTeamFirst ? opponentMaps : yourMaps
 
     // Check for existing submission with same match key
     const { data: existing } = await supabase
@@ -397,30 +404,16 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
 
     if (existing && existing.length > 0) {
       const other = existing[0]
-      
-      // Normalize scores for comparison (always compare with team1 as the lower sorted ID)
-      const isSubmitterTeam1First = team1Id === sortedIds[0]
-      const normalizedSubmission = {
-        team1Maps: isSubmitterTeam1First ? team1Maps : team2Maps,
-        team2Maps: isSubmitterTeam1First ? team2Maps : team1Maps,
-      }
-      
-      const isOtherTeam1First = other.team1_id === sortedIds[0]
-      const normalizedOther = {
-        team1Maps: isOtherTeam1First ? other.team1_maps : other.team2_maps,
-        team2Maps: isOtherTeam1First ? other.team2_maps : other.team1_maps,
-      }
 
-      if (normalizedSubmission.team1Maps === normalizedOther.team1Maps && 
-          normalizedSubmission.team2Maps === normalizedOther.team2Maps) {
+      if (team1Maps === other.team1_maps && team2Maps === other.team2_maps) {
         // Results match - create confirmed match
         const { error: matchError } = await supabase.from('matches').insert({
           division,
           week,
-          team1_id: sortedIds[0],
-          team2_id: sortedIds[1],
-          team1_maps: normalizedSubmission.team1Maps,
-          team2_maps: normalizedSubmission.team2Maps,
+          team1_id: team1Id,
+          team2_id: team2Id,
+          team1_maps: team1Maps,
+          team2_maps: team2Maps,
         })
 
         if (matchError) {
@@ -445,7 +438,7 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
           team2_id: team2Id,
           team1_maps: team1Maps,
           team2_maps: team2Maps,
-          submitted_by: submittedBy,
+          submitted_by: yourTeam?.name || 'Unknown',
           status: 'disputed',
         })
 
@@ -467,7 +460,7 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
         team2_id: team2Id,
         team1_maps: team1Maps,
         team2_maps: team2Maps,
-        submitted_by: submittedBy,
+        submitted_by: yourTeam?.name || 'Unknown',
         status: 'pending',
       })
 
@@ -493,25 +486,13 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Your Team */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-400 mb-2">Your Team Name</label>
-            <input
-              type="text"
-              value={submittedBy}
-              onChange={(e) => setSubmittedBy(e.target.value)}
-              placeholder="Enter your team name"
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors"
-            />
-          </div>
-
           {/* Division */}
           <div>
             <label className="block text-sm font-semibold text-gray-400 mb-2">Division</label>
             <select 
               value={division} 
-              onChange={(e) => { setDivision(Number(e.target.value)); setTeam1Id(''); setTeam2Id(''); }}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors"
+              onChange={(e) => { setDivision(Number(e.target.value)); setYourTeamId(''); setOpponentId(''); }}
+              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
             >
               <option value={1}>Division One</option>
               <option value={2}>Division Two</option>
@@ -526,7 +507,7 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
             <select 
               value={week} 
               onChange={(e) => setWeek(Number(e.target.value))}
-              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors"
+              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
             >
               {[1, 2, 3, 4, 5].map(w => (
                 <option key={w} value={w}>Week {w}</option>
@@ -534,55 +515,61 @@ function SubmitResultForm({ teams, onSubmitSuccess }) {
             </select>
           </div>
 
-          {/* Teams */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-400 mb-2">Team 1</label>
-              <select 
-                value={team1Id} 
-                onChange={(e) => setTeam1Id(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors"
-              >
-                <option value="">Select team</option>
-                {divTeams.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-400 mb-2">Team 2</label>
-              <select 
-                value={team2Id} 
-                onChange={(e) => setTeam2Id(e.target.value)}
-                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors"
-              >
-                <option value="">Select team</option>
-                {divTeams.map(t => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            </div>
+          {/* Your Team */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-400 mb-2">Your Team</label>
+            <select 
+              value={yourTeamId} 
+              onChange={(e) => setYourTeamId(e.target.value)}
+              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
+            >
+              <option value="">Select your team</option>
+              {divTeams.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Opponent */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-400 mb-2">Opponent</label>
+            <select 
+              value={opponentId} 
+              onChange={(e) => setOpponentId(e.target.value)}
+              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
+            >
+              <option value="">Select opponent</option>
+              {divTeams.filter(t => t.id !== yourTeamId).map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* Score */}
           <div>
             <label className="block text-sm font-semibold text-gray-400 mb-2">Map Score (Bo5)</label>
             <div className="flex items-center gap-4 justify-center">
-              <select 
-                value={team1Maps} 
-                onChange={(e) => setTeam1Maps(Number(e.target.value))}
-                className="w-20 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-cyan-500"
-              >
-                {[0, 1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-              <span className="text-2xl text-gray-600">-</span>
-              <select 
-                value={team2Maps} 
-                onChange={(e) => setTeam2Maps(Number(e.target.value))}
-                className="w-20 px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-cyan-500"
-              >
-                {[0, 1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              <div className="text-center">
+                <div className="text-xs text-gray-500 mb-1">{yourTeam?.name || 'Your team'}</div>
+                <select 
+                  value={yourMaps} 
+                  onChange={(e) => setYourMaps(Number(e.target.value))}
+                  className="w-20 px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-cyan-500 text-white"
+                >
+                  {[0, 1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
+              <span className="text-2xl text-gray-600 mt-5">-</span>
+              <div className="text-center">
+                <div className="text-xs text-gray-500 mb-1">{teams.find(t => t.id === opponentId)?.name || 'Opponent'}</div>
+                <select 
+                  value={opponentMaps} 
+                  onChange={(e) => setOpponentMaps(Number(e.target.value))}
+                  className="w-20 px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-cyan-500 text-white"
+                >
+                  {[0, 1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+              </div>
             </div>
           </div>
 
@@ -839,7 +826,7 @@ function AdminQuickAdd({ teams, onSuccess }) {
           <select 
             value={division} 
             onChange={(e) => { setDivision(Number(e.target.value)); setTeam1Id(''); setTeam2Id(''); }}
-            className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg"
+            className="px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-white"
           >
             <option value={1}>Division One</option>
             <option value={2}>Division Two</option>
@@ -849,7 +836,7 @@ function AdminQuickAdd({ teams, onSuccess }) {
           <select 
             value={week} 
             onChange={(e) => setWeek(Number(e.target.value))}
-            className="px-4 py-2 bg-white/5 border border-white/10 rounded-lg"
+            className="px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-white"
           >
             {[1, 2, 3, 4, 5].map(w => <option key={w} value={w}>Week {w}</option>)}
           </select>
@@ -858,24 +845,24 @@ function AdminQuickAdd({ teams, onSuccess }) {
           <select 
             value={team1Id} 
             onChange={(e) => setTeam1Id(e.target.value)}
-            className="col-span-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg"
+            className="col-span-2 px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-white"
           >
             <option value="">Team 1</option>
             {divTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
           <div className="flex items-center justify-center gap-1">
-            <select value={team1Maps} onChange={(e) => setTeam1Maps(Number(e.target.value))} className="w-12 py-1 bg-white/5 border border-white/10 rounded text-center">
+            <select value={team1Maps} onChange={(e) => setTeam1Maps(Number(e.target.value))} className="w-12 py-1 bg-[#1a1a2e] border border-white/10 rounded text-center text-white">
               {[0,1,2,3].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
             <span>-</span>
-            <select value={team2Maps} onChange={(e) => setTeam2Maps(Number(e.target.value))} className="w-12 py-1 bg-white/5 border border-white/10 rounded text-center">
+            <select value={team2Maps} onChange={(e) => setTeam2Maps(Number(e.target.value))} className="w-12 py-1 bg-[#1a1a2e] border border-white/10 rounded text-center text-white">
               {[0,1,2,3].map(n => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
           <select 
             value={team2Id} 
             onChange={(e) => setTeam2Id(e.target.value)}
-            className="col-span-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg"
+            className="col-span-2 px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-white"
           >
             <option value="">Team 2</option>
             {divTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
