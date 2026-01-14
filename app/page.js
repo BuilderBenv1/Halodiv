@@ -1500,6 +1500,11 @@ function FixturesView({ selectedDivision, setSelectedDivision, teams, getTeamNam
                 const result = getFixtureResult(fixture)
                 const isExpanded = expandedFixture === fixture.id
                 
+                // Check if match teams are in reverse order compared to fixture
+                const isReversed = result && result.team1_id === fixture.team2_id
+                const team1Score = result ? (isReversed ? result.team2_maps : result.team1_maps) : null
+                const team2Score = result ? (isReversed ? result.team1_maps : result.team2_maps) : null
+                
                 return (
                   <div key={fixture.id} className="bg-black/40 rounded-lg overflow-hidden">
                     <div 
@@ -1508,19 +1513,19 @@ function FixturesView({ selectedDivision, setSelectedDivision, teams, getTeamNam
                     >
                       <div className="flex items-center gap-4 flex-1">
                         <div className="flex-1 flex items-center justify-center gap-4">
-                          <span className={`font-semibold text-right flex-1 ${result && result.team1_maps > result.team2_maps ? 'text-green-400' : ''}`}>
+                          <span className={`font-semibold text-right flex-1 ${result && team1Score > team2Score ? 'text-green-400' : ''}`}>
                             {getTeamName(fixture.team1_id)}
                           </span>
                           {result ? (
                             <span className="font-mono bg-white/10 px-3 py-1 rounded">
-                              <span className={result.team1_maps > result.team2_maps ? 'text-green-400' : ''}>{result.team1_maps}</span>
+                              <span className={team1Score > team2Score ? 'text-green-400' : ''}>{team1Score}</span>
                               <span className="text-gray-500 mx-1">-</span>
-                              <span className={result.team2_maps > result.team1_maps ? 'text-green-400' : ''}>{result.team2_maps}</span>
+                              <span className={team2Score > team1Score ? 'text-green-400' : ''}>{team2Score}</span>
                             </span>
                           ) : (
                             <span className="text-gray-500 text-sm px-3">vs</span>
                           )}
-                          <span className={`font-semibold text-left flex-1 ${result && result.team2_maps > result.team1_maps ? 'text-green-400' : ''}`}>
+                          <span className={`font-semibold text-left flex-1 ${result && team2Score > team1Score ? 'text-green-400' : ''}`}>
                             {getTeamName(fixture.team2_id)}
                           </span>
                         </div>
