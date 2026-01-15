@@ -2231,13 +2231,14 @@ function FixtureDetails({ matchId, teams, getTeamName }) {
       seriesStats[ps.player_gamertag] = {
         gamertag: ps.player_gamertag,
         team_id: ps.team_id,
-        kills: 0, deaths: 0, assists: 0, damage: 0
+        kills: 0, deaths: 0, assists: 0, damage: 0, damage_taken: 0
       }
     }
     seriesStats[ps.player_gamertag].kills += ps.kills || 0
     seriesStats[ps.player_gamertag].deaths += ps.deaths || 0
     seriesStats[ps.player_gamertag].assists += ps.assists || 0
     seriesStats[ps.player_gamertag].damage += ps.damage || 0
+    seriesStats[ps.player_gamertag].damage_taken += ps.damage_taken || 0
   })
 
   return (
@@ -2254,22 +2255,31 @@ function FixtureDetails({ matchId, teams, getTeamName }) {
                 <th className="text-center py-2">D</th>
                 <th className="text-center py-2">A</th>
                 <th className="text-center py-2">K/D</th>
-                <th className="text-center py-2">Damage</th>
+                <th className="text-center py-2">Dmg</th>
+                <th className="text-center py-2">Taken</th>
+                <th className="text-center py-2">+/-</th>
               </tr>
             </thead>
             <tbody>
               {Object.values(seriesStats)
                 .sort((a, b) => b.kills - a.kills)
-                .map(player => (
-                  <tr key={player.gamertag} className="border-t border-white/5">
-                    <td className="py-2 font-medium">{player.gamertag}</td>
-                    <td className="text-center text-green-400">{player.kills}</td>
-                    <td className="text-center text-red-400">{player.deaths}</td>
-                    <td className="text-center text-gray-400">{player.assists}</td>
-                    <td className="text-center">{player.deaths > 0 ? (player.kills / player.deaths).toFixed(2) : player.kills}</td>
-                    <td className="text-center text-gray-400">{player.damage.toLocaleString()}</td>
-                  </tr>
-                ))}
+                .map(player => {
+                  const dmgDiff = player.damage - player.damage_taken
+                  return (
+                    <tr key={player.gamertag} className="border-t border-white/5">
+                      <td className="py-2 font-medium">{player.gamertag}</td>
+                      <td className="text-center text-green-400">{player.kills}</td>
+                      <td className="text-center text-red-400">{player.deaths}</td>
+                      <td className="text-center text-gray-400">{player.assists}</td>
+                      <td className="text-center">{player.deaths > 0 ? (player.kills / player.deaths).toFixed(2) : player.kills}</td>
+                      <td className="text-center text-gray-400">{player.damage.toLocaleString()}</td>
+                      <td className="text-center text-gray-400">{player.damage_taken.toLocaleString()}</td>
+                      <td className={`text-center font-semibold ${dmgDiff > 0 ? 'text-green-400' : dmgDiff < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                        {dmgDiff > 0 ? '+' : ''}{dmgDiff.toLocaleString()}
+                      </td>
+                    </tr>
+                  )
+                })}
             </tbody>
           </table>
         </div>
@@ -2293,19 +2303,28 @@ function FixtureDetails({ matchId, teams, getTeamName }) {
                     <th className="text-center py-1">K</th>
                     <th className="text-center py-1">D</th>
                     <th className="text-center py-1">A</th>
-                    <th className="text-center py-1">Damage</th>
+                    <th className="text-center py-1">Dmg</th>
+                    <th className="text-center py-1">Taken</th>
+                    <th className="text-center py-1">+/-</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {stats.sort((a, b) => b.kills - a.kills).map(ps => (
-                    <tr key={ps.id} className="border-t border-white/5">
-                      <td className="py-1">{ps.player_gamertag}</td>
-                      <td className="text-center text-green-400">{ps.kills}</td>
-                      <td className="text-center text-red-400">{ps.deaths}</td>
-                      <td className="text-center text-gray-400">{ps.assists}</td>
-                      <td className="text-center text-gray-400">{ps.damage?.toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {stats.sort((a, b) => b.kills - a.kills).map(ps => {
+                    const dmgDiff = (ps.damage || 0) - (ps.damage_taken || 0)
+                    return (
+                      <tr key={ps.id} className="border-t border-white/5">
+                        <td className="py-1">{ps.player_gamertag}</td>
+                        <td className="text-center text-green-400">{ps.kills}</td>
+                        <td className="text-center text-red-400">{ps.deaths}</td>
+                        <td className="text-center text-gray-400">{ps.assists}</td>
+                        <td className="text-center text-gray-400">{ps.damage?.toLocaleString()}</td>
+                        <td className="text-center text-gray-400">{ps.damage_taken?.toLocaleString()}</td>
+                        <td className={`text-center font-semibold ${dmgDiff > 0 ? 'text-green-400' : dmgDiff < 0 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {dmgDiff > 0 ? '+' : ''}{dmgDiff.toLocaleString()}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
