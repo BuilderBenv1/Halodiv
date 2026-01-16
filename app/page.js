@@ -1331,11 +1331,11 @@ function AdminStatsUpload({ teams, onSuccess }) {
       const matchedTeam0 = findTeam(team0Gamertags)
       const matchedTeam1 = findTeam(team1Gamertags)
 
-      // Calculate series score
+      // Calculate series score using Winner column
       let team0Wins = 0, team1Wins = 0
       games.forEach(g => {
-        if (g.team0Score > g.team1Score) team0Wins++
-        else if (g.team1Score > g.team0Score) team1Wins++
+        if (g.winner === g.team0Name) team0Wins++
+        else if (g.winner === g.team1Name) team1Wins++
       })
 
       setPreview({
