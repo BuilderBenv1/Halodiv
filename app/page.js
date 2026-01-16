@@ -79,11 +79,13 @@ export default function Home() {
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0L60 30L30 60L0 30Z' fill='none' stroke='%2306b6d4' stroke-width='0.5' opacity='0.3'/%3E%3C/svg%3E")`
         }} />
         
-        <div className="relative max-w-6xl mx-auto px-4 py-8">
+        <div className="relative max-w-6xl mx-auto px-4 py-6">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-600 flex items-center justify-center text-2xl font-black">
-              HDC
-            </div>
+            <img 
+              src="/logo.png" 
+              alt="HDC Logo" 
+              className="w-20 h-20 rounded-full"
+            />
             <div>
               <h1 className="text-3xl font-black tracking-tight bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
                 HALO DIVISIONAL CHAMPIONSHIP
