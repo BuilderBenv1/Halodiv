@@ -464,6 +464,7 @@ function StandingsView({ selectedDivision, setSelectedDivision, standings, match
               <tr className="text-xs uppercase tracking-wider text-gray-500 border-b border-white/10">
                 <th className="text-left py-4 px-6 w-12">#</th>
                 <th className="text-left py-4 px-6">Team</th>
+                <th className="text-center py-4 px-4">P</th>
                 <th className="text-center py-4 px-4">W</th>
                 <th className="text-center py-4 px-4">L</th>
                 <th className="text-center py-4 px-4">MW</th>
@@ -491,6 +492,7 @@ function StandingsView({ selectedDivision, setSelectedDivision, standings, match
                       )) : ''}
                     </div>
                   </td>
+                  <td className="text-center py-4 px-4 text-gray-400">{team.wins + team.losses}</td>
                   <td className="text-center py-4 px-4 font-bold text-green-400">{team.wins}</td>
                   <td className="text-center py-4 px-4 font-bold text-red-400">{team.losses}</td>
                   <td className="text-center py-4 px-4 text-gray-400">{team.maps_won}</td>
