@@ -808,254 +808,60 @@ function TeamView({ team, matches, getTeamName, onBack }) {
 }
 
 // Submit Result Form Component
-function SubmitResultForm({ teams, onSubmitSuccess }) {
-  const [division, setDivision] = useState(1)
-  const [yourTeamId, setYourTeamId] = useState('')
-  const [opponentId, setOpponentId] = useState('')
-  const [yourMaps, setYourMaps] = useState(3)
-  const [opponentMaps, setOpponentMaps] = useState(0)
-  const [week, setWeek] = useState(1)
-  const [result, setResult] = useState(null)
-  const [submitting, setSubmitting] = useState(false)
-
-  const divTeams = teams.filter(t => t.division === division)
-  const yourTeam = teams.find(t => t.id === yourTeamId)
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    setResult(null)
-    
-    if (!yourTeamId || !opponentId) {
-      setResult({ status: 'error', message: 'Please select both teams' })
-      return
-    }
-    
-    if (yourTeamId === opponentId) {
-      setResult({ status: 'error', message: 'Please select two different teams' })
-      return
-    }
-
-    if (yourMaps + opponentMaps > 5 || (yourMaps < 3 && opponentMaps < 3)) {
-      setResult({ status: 'error', message: 'Invalid Bo5 score (winner needs 3 maps)' })
-      return
-    }
-
-    setSubmitting(true)
-
-    // Create match key from sorted team IDs + week
-    const sortedIds = [yourTeamId, opponentId].sort()
-    const matchKey = `${sortedIds[0]}_${sortedIds[1]}_w${week}`
-    
-    // Determine team1/team2 based on sorted order
-    const isYourTeamFirst = yourTeamId === sortedIds[0]
-    const team1Id = sortedIds[0]
-    const team2Id = sortedIds[1]
-    const team1Maps = isYourTeamFirst ? yourMaps : opponentMaps
-    const team2Maps = isYourTeamFirst ? opponentMaps : yourMaps
-
-    // Check for existing submission with same match key
-    const { data: existing } = await supabase
-      .from('match_submissions')
-      .select('*')
-      .eq('match_key', matchKey)
-      .eq('status', 'pending')
-
-    if (existing && existing.length > 0) {
-      const other = existing[0]
-
-      if (team1Maps === other.team1_maps && team2Maps === other.team2_maps) {
-        // Results match - create confirmed match
-        const { error: matchError } = await supabase.from('matches').insert({
-          division,
-          week,
-          team1_id: team1Id,
-          team2_id: team2Id,
-          team1_maps: team1Maps,
-          team2_maps: team2Maps,
-        })
-
-        if (matchError) {
-          setResult({ status: 'error', message: 'Error creating match: ' + matchError.message })
-        } else {
-          // Update submission status
-          await supabase
-            .from('match_submissions')
-            .update({ status: 'resolved' })
-            .eq('match_key', matchKey)
-
-          setResult({ status: 'confirmed', message: 'Results matched! Match confirmed.' })
-          onSubmitSuccess()
-        }
-      } else {
-        // Results don't match - flag as disputed
-        await supabase.from('match_submissions').insert({
-          match_key: matchKey,
-          division,
-          week,
-          team1_id: team1Id,
-          team2_id: team2Id,
-          team1_maps: team1Maps,
-          team2_maps: team2Maps,
-          submitted_by: yourTeam?.name || 'Unknown',
-          status: 'disputed',
-        })
-
-        await supabase
-          .from('match_submissions')
-          .update({ status: 'disputed' })
-          .eq('id', other.id)
-
-        setResult({ status: 'flagged', message: "Results don't match! Flagged for admin review." })
-        onSubmitSuccess()
-      }
-    } else {
-      // First submission
-      const { error } = await supabase.from('match_submissions').insert({
-        match_key: matchKey,
-        division,
-        week,
-        team1_id: team1Id,
-        team2_id: team2Id,
-        team1_maps: team1Maps,
-        team2_maps: team2Maps,
-        submitted_by: yourTeam?.name || 'Unknown',
-        status: 'pending',
-      })
-
-      if (error) {
-        setResult({ status: 'error', message: 'Error submitting: ' + error.message })
-      } else {
-        setResult({ status: 'pending', message: 'Result submitted. Awaiting opponent confirmation.' })
-        onSubmitSuccess()
-      }
-    }
-
-    setSubmitting(false)
+// Helper function to calculate current week and available weeks
+function getWeekInfo() {
+  const WEEK_1_START = new Date('2026-01-12T00:00:00Z') // Monday Jan 12, 2026
+  const WEEK_DURATION = 7 // 7 days per week cycle
+  const OVERLAP_DAYS = 2 // Show previous week for 2 extra days
+  
+  const now = new Date()
+  const daysSinceStart = Math.floor((now - WEEK_1_START) / (1000 * 60 * 60 * 24))
+  
+  // Current week number (1-indexed)
+  const currentWeek = Math.max(1, Math.min(5, Math.floor(daysSinceStart / WEEK_DURATION) + 1))
+  
+  // Days into current week
+  const daysIntoWeek = daysSinceStart % WEEK_DURATION
+  
+  // Available weeks for submission
+  const availableWeeks = [currentWeek]
+  
+  // If we're in the first OVERLAP_DAYS of a new week, also show previous week
+  if (currentWeek > 1 && daysIntoWeek < OVERLAP_DAYS) {
+    availableWeeks.unshift(currentWeek - 1)
   }
+  
+  return {
+    currentWeek,
+    availableWeeks: availableWeeks.filter(w => w >= 1 && w <= 5),
+    daysIntoWeek
+  }
+}
 
+function SubmitResultForm({ teams, onSubmitSuccess }) {
+  const weekInfo = getWeekInfo()
+  
   return (
     <div className="max-w-xl mx-auto">
-      <div className="bg-gradient-to-b from-white/5 to-transparent rounded-xl border border-white/10 overflow-hidden">
+      <div className="bg-gradient-to-b from-white/5 to-transparent rounded-xl border border-white/10 overflow-hidden mb-6">
         <div className="p-6 border-b border-white/10">
           <h2 className="text-xl font-bold">Submit Match Result</h2>
           <p className="text-gray-500 text-sm mt-1">
-            Both teams submit independently. Results auto-confirm if they match.
+            Paste your Leaf scrim link to import match stats
           </p>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Division */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-400 mb-2">Division</label>
-            <select 
-              value={division} 
-              onChange={(e) => { setDivision(Number(e.target.value)); setYourTeamId(''); setOpponentId(''); }}
-              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
-            >
-              <option value={1}>Division One</option>
-              <option value={2}>Division Two</option>
-              <option value={3}>Division Three</option>
-              <option value={4}>Division Four</option>
-            </select>
+        <div className="p-6">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-400">Current Week:</span>
+            <span className="bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded font-semibold">Week {weekInfo.currentWeek}</span>
+            {weekInfo.availableWeeks.length > 1 && (
+              <span className="text-gray-500 text-xs">(Week {weekInfo.availableWeeks[0]} still open for {2 - weekInfo.daysIntoWeek} more day{2 - weekInfo.daysIntoWeek !== 1 ? 's' : ''})</span>
+            )}
           </div>
-
-          {/* Week */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-400 mb-2">Week</label>
-            <select 
-              value={week} 
-              onChange={(e) => setWeek(Number(e.target.value))}
-              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
-            >
-              {[1, 2, 3, 4, 5].map(w => (
-                <option key={w} value={w}>Week {w}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Your Team */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-400 mb-2">Your Team</label>
-            <select 
-              value={yourTeamId} 
-              onChange={(e) => setYourTeamId(e.target.value)}
-              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
-            >
-              <option value="">Select your team</option>
-              {divTeams.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Opponent */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-400 mb-2">Opponent</label>
-            <select 
-              value={opponentId} 
-              onChange={(e) => setOpponentId(e.target.value)}
-              className="w-full px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white"
-            >
-              <option value="">Select opponent</option>
-              {divTeams.filter(t => t.id !== yourTeamId).map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Score */}
-          <div>
-            <label className="block text-sm font-semibold text-gray-400 mb-2">Map Score (Bo5)</label>
-            <div className="flex items-center gap-4 justify-center">
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">{yourTeam?.name || 'Your team'}</div>
-                <select 
-                  value={yourMaps} 
-                  onChange={(e) => setYourMaps(Number(e.target.value))}
-                  className="w-20 px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-cyan-500 text-white"
-                >
-                  {[0, 1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-              <span className="text-2xl text-gray-600 mt-5">-</span>
-              <div className="text-center">
-                <div className="text-xs text-gray-500 mb-1">{teams.find(t => t.id === opponentId)?.name || 'Opponent'}</div>
-                <select 
-                  value={opponentMaps} 
-                  onChange={(e) => setOpponentMaps(Number(e.target.value))}
-                  className="w-20 px-4 py-3 bg-[#1a1a2e] border border-white/10 rounded-lg text-center text-xl font-bold focus:outline-none focus:border-cyan-500 text-white"
-                >
-                  {[0, 1, 2, 3].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-lg font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50"
-          >
-            {submitting ? 'Submitting...' : 'Submit Result'}
-          </button>
-
-          {result && (
-            <div className={`p-4 rounded-lg text-center font-semibold
-              ${result.status === 'confirmed' ? 'bg-green-500/20 text-green-400' : ''}
-              ${result.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : ''}
-              ${result.status === 'flagged' ? 'bg-orange-500/20 text-orange-400' : ''}
-              ${result.status === 'error' ? 'bg-red-500/20 text-red-400' : ''}
-            `}>
-              {result.message}
-            </div>
-          )}
-        </form>
+        </div>
       </div>
 
-      {/* Leaf Scrim Import for players */}
-      <div className="mt-6">
-        <LeafStatsUpload teams={teams} onSuccess={onSubmitSuccess} />
-      </div>
+      <LeafStatsUpload teams={teams} onSuccess={onSubmitSuccess} availableWeeks={weekInfo.availableWeeks} defaultWeek={weekInfo.currentWeek} />
     </div>
   )
 }
@@ -1813,10 +1619,10 @@ function AdminStatsUpload({ teams, onSuccess }) {
 }
 
 // Leaf Scrim Import Component
-function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true }) {
+function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availableWeeks = [1, 2, 3, 4, 5], defaultWeek = 1 }) {
   const [scrimUrl, setScrimUrl] = useState('')
   const [division, setDivision] = useState(null) // null = auto-detect
-  const [week, setWeek] = useState(1)
+  const [week, setWeek] = useState(defaultWeek)
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
@@ -2056,7 +1862,7 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true }) {
             onChange={(e) => setWeek(Number(e.target.value))}
             className="px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-white"
           >
-            {[1, 2, 3, 4, 5].map(w => <option key={w} value={w}>Week {w}</option>)}
+            {availableWeeks.map(w => <option key={w} value={w}>Week {w}</option>)}
           </select>
         </div>
 
