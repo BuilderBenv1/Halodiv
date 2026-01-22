@@ -480,7 +480,7 @@ function StandingsView({ selectedDivision, setSelectedDivision, standings, match
                   onClick={() => onTeamClick(team)}
                 >
                   <td className="py-4 px-6">
-                    <span className={`font-bold ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-400' : idx === 2 ? 'text-amber-600' : 'text-gray-600'}`}>
+                    <span className={`font-bold text-lg ${idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-300' : idx === 2 ? 'text-amber-600' : 'text-gray-600'}`}>
                       {idx + 1}
                     </span>
                   </td>
@@ -493,8 +493,8 @@ function StandingsView({ selectedDivision, setSelectedDivision, standings, match
                     </div>
                   </td>
                   <td className="text-center py-4 px-4 text-gray-400">{team.wins + team.losses}</td>
-                  <td className="text-center py-4 px-4 font-bold text-green-400">{team.wins}</td>
-                  <td className="text-center py-4 px-4 font-bold text-red-400">{team.losses}</td>
+                  <td className="text-center py-4 px-4 text-white">{team.wins}</td>
+                  <td className="text-center py-4 px-4 text-white">{team.losses}</td>
                   <td className="text-center py-4 px-4 text-gray-400">{team.maps_won}</td>
                   <td className="text-center py-4 px-4 text-gray-400">{team.maps_lost}</td>
                   <td className="text-center py-4 px-4">
