@@ -519,7 +519,7 @@ function StandingsView({ selectedDivision, setSelectedDivision, standings, match
             <p className="text-gray-500 text-center py-8">No confirmed matches yet</p>
           ) : (
             <div className="space-y-3">
-              {matches.slice(0, 10).map(match => (
+              {matches.filter(m => !(m.team1_maps === 0 && m.team2_maps === 0)).slice(0, 10).map(match => (
                 <div key={match.id} className="flex items-center justify-between p-4 bg-white/5 rounded-lg">
                   <div className="flex-1 text-right font-semibold">{getTeamName(match.team1_id)}</div>
                   <div className="px-6 py-2 mx-4 bg-black/40 rounded-lg font-mono font-bold">
@@ -707,6 +707,7 @@ function TeamView({ team, matches, getTeamName, onBack }) {
                 const teamMaps = isTeam1 ? match.team1_maps : match.team2_maps
                 const oppMaps = isTeam1 ? match.team2_maps : match.team1_maps
                 const oppName = getTeamName(isTeam1 ? match.team2_id : match.team1_id)
+                const isScheduled = teamMaps === 0 && oppMaps === 0
                 const won = teamMaps > oppMaps
                 const isExpanded = expandedMatch === match.id
                 const matchData = matchGames[match.id]
@@ -714,21 +715,21 @@ function TeamView({ team, matches, getTeamName, onBack }) {
                 return (
                   <div key={match.id} className="rounded-lg overflow-hidden">
                     <div 
-                      onClick={() => fetchMatchGames(match.id)}
-                      className={`flex items-center justify-between p-4 cursor-pointer transition-colors ${won ? 'bg-green-500/10 hover:bg-green-500/20' : 'bg-red-500/10 hover:bg-red-500/20'}`}
+                      onClick={() => !isScheduled && fetchMatchGames(match.id)}
+                      className={`flex items-center justify-between p-4 ${isScheduled ? '' : 'cursor-pointer'} transition-colors ${isScheduled ? 'bg-white/5 hover:bg-white/10' : won ? 'bg-green-500/10 hover:bg-green-500/20' : 'bg-red-500/10 hover:bg-red-500/20'}`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className={`font-bold ${won ? 'text-green-400' : 'text-red-400'}`}>
-                          {won ? 'W' : 'L'}
+                        <span className={`font-bold ${isScheduled ? 'text-yellow-400' : won ? 'text-green-400' : 'text-red-400'}`}>
+                          {isScheduled ? '—' : won ? 'W' : 'L'}
                         </span>
                         <span className="text-gray-400">vs {oppName}</span>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="font-mono font-bold">
-                          {teamMaps} - {oppMaps}
+                          {isScheduled ? 'vs' : `${teamMaps} - ${oppMaps}`}
                         </div>
                         <div className="text-sm text-gray-500">Week {match.week}</div>
-                        <span className="text-gray-500">{isExpanded ? '▼' : '▶'}</span>
+                        {!isScheduled && <span className="text-gray-500">{isExpanded ? '▼' : '▶'}</span>}
                       </div>
                     </div>
                     
