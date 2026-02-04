@@ -1733,30 +1733,68 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
     setError(null)
 
     try {
+      console.log('Starting upload for division', uploadDivision, 'week', week)
+      console.log('Team 0:', preview.matchedTeam0.name, preview.matchedTeam0.id)
+      console.log('Team 1:', preview.matchedTeam1.name, preview.matchedTeam1.id)
+      
       const sortedIds = [preview.matchedTeam0.id, preview.matchedTeam1.id].sort()
       const isTeam0First = preview.matchedTeam0.id === sortedIds[0]
+      
+      console.log('Sorted IDs:', sortedIds, 'isTeam0First:', isTeam0First)
 
-      // Check for existing match
-      const { data: existingMatches } = await supabase
+      // Check for existing match fixture
+      const { data: existingMatches, error: findError } = await supabase
         .from('matches')
-        .select('id')
+        .select('id, team1_maps, team2_maps')
         .eq('division', uploadDivision)
         .eq('week', week)
         .eq('team1_id', sortedIds[0])
         .eq('team2_id', sortedIds[1])
 
+      if (findError) {
+        console.error('Error finding existing match:', findError)
+        throw new Error('Failed to check for existing fixture: ' + findError.message)
+      }
+      
+      console.log('Existing matches found:', existingMatches?.length || 0, existingMatches)
+
       let match
 
       if (existingMatches && existingMatches.length > 0) {
         match = existingMatches[0]
-        await supabase.from('player_stats').delete().eq('match_id', match.id)
-        await supabase.from('games').delete().eq('match_id', match.id)
-        await supabase.from('matches').update({
+        console.log('Updating existing match:', match.id)
+        
+        // Delete existing stats
+        const { error: deleteStatsError } = await supabase.from('player_stats').delete().eq('match_id', match.id)
+        if (deleteStatsError) {
+          console.warn('Error deleting player_stats (may be empty):', deleteStatsError)
+        }
+        
+        const { error: deleteGamesError } = await supabase.from('games').delete().eq('match_id', match.id)
+        if (deleteGamesError) {
+          console.warn('Error deleting games (may be empty):', deleteGamesError)
+        }
+        
+        // Update match scores
+        const updateData = {
           team1_maps: isTeam0First ? preview.team0Wins : preview.team1Wins,
           team2_maps: isTeam0First ? preview.team1Wins : preview.team0Wins,
-        }).eq('id', match.id)
+        }
+        console.log('Updating match with:', updateData)
+        
+        const { error: updateError } = await supabase
+          .from('matches')
+          .update(updateData)
+          .eq('id', match.id)
+        
+        if (updateError) {
+          console.error('Error updating match:', updateError)
+          throw new Error('Failed to update match scores: ' + updateError.message)
+        }
+        console.log('Match updated successfully')
       } else {
-        const { data: newMatch, error: matchError } = await supabase.from('matches').insert({
+        console.log('No existing fixture found - creating new match')
+        const insertData = {
           division: uploadDivision,
           week,
           team1_id: sortedIds[0],
@@ -1764,18 +1802,26 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
           team1_maps: isTeam0First ? preview.team0Wins : preview.team1Wins,
           team2_maps: isTeam0First ? preview.team1Wins : preview.team0Wins,
           admin_approved: true,
-        }).select().single()
+        }
+        console.log('Inserting new match:', insertData)
+        
+        const { data: newMatch, error: matchError } = await supabase.from('matches').insert(insertData).select().single()
 
-        if (matchError) throw matchError
+        if (matchError) {
+          console.error('Error inserting match:', matchError)
+          throw matchError
+        }
         match = newMatch
+        console.log('New match created:', match.id)
       }
 
       // Create game records
+      console.log('Creating', preview.games.length, 'game records')
       for (let i = 0; i < preview.games.length; i++) {
         const game = preview.games[i]
         const gameWinner = game.teamAWon ? preview.matchedTeam0 : preview.matchedTeam1
 
-        const { data: gameRecord, error: gameError } = await supabase.from('games').insert({
+        const gameData = {
           match_id: match.id,
           game_number: i + 1,
           game_variant: game.variant,
@@ -1785,9 +1831,15 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
           winner_team_id: gameWinner.id,
           duration: game.duration,
           halo_game_id: game.matchId,
-        }).select().single()
+        }
+        console.log(`Game ${i + 1}:`, gameData)
+        
+        const { data: gameRecord, error: gameError } = await supabase.from('games').insert(gameData).select().single()
 
-        if (gameError) throw gameError
+        if (gameError) {
+          console.error('Error inserting game:', gameError)
+          throw gameError
+        }
 
         const playerStats = game.players.map(p => {
           // Match player to team by gamertag, not by which side they were on in Leaf
@@ -1821,15 +1873,21 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
           }
         })
 
+        console.log(`Inserting ${playerStats.length} player stats for game ${i + 1}`)
         const { error: statsError } = await supabase.from('player_stats').insert(playerStats)
-        if (statsError) throw statsError
+        if (statsError) {
+          console.error('Error inserting player stats:', statsError)
+          throw statsError
+        }
       }
 
+      console.log('Upload complete!')
       setSuccess(`Uploaded ${preview.games.length} games from Leaf scrim!`)
       setPreview(null)
       setScrimUrl('')
       onSuccess()
     } catch (err) {
+      console.error('Upload failed:', err)
       setError('Failed to upload: ' + err.message)
     }
 
@@ -1863,7 +1921,7 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
             onChange={(e) => setWeek(Number(e.target.value))}
             className="px-4 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-white"
           >
-            {availableWeeks.map(w => <option key={w} value={w}>Week {w}</option>)}
+            {[1, 2, 3, 4, 5].map(w => <option key={w} value={w}>Week {w}{!availableWeeks.includes(w) ? ' (past)' : ''}</option>)}
           </select>
         </div>
 
