@@ -1736,20 +1736,17 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
       console.log('Starting upload for division', uploadDivision, 'week', week)
       console.log('Team 0:', preview.matchedTeam0.name, preview.matchedTeam0.id)
       console.log('Team 1:', preview.matchedTeam1.name, preview.matchedTeam1.id)
-      
-      const sortedIds = [preview.matchedTeam0.id, preview.matchedTeam1.id].sort()
-      const isTeam0First = preview.matchedTeam0.id === sortedIds[0]
-      
-      console.log('Sorted IDs:', sortedIds, 'isTeam0First:', isTeam0First)
 
-      // Check for existing match fixture
+      // Check for existing match fixture (check BOTH team orders)
+      const team0Id = preview.matchedTeam0.id
+      const team1Id = preview.matchedTeam1.id
+      
       const { data: existingMatches, error: findError } = await supabase
         .from('matches')
-        .select('id, team1_maps, team2_maps')
+        .select('id, team1_id, team2_id, team1_maps, team2_maps')
         .eq('division', uploadDivision)
         .eq('week', week)
-        .eq('team1_id', sortedIds[0])
-        .eq('team2_id', sortedIds[1])
+        .or(`and(team1_id.eq.${team0Id},team2_id.eq.${team1Id}),and(team1_id.eq.${team1Id},team2_id.eq.${team0Id})`)
 
       if (findError) {
         console.error('Error finding existing match:', findError)
@@ -1759,10 +1756,13 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
       console.log('Existing matches found:', existingMatches?.length || 0, existingMatches)
 
       let match
+      let isTeam0First // true if matchedTeam0 is team1 in the fixture
 
       if (existingMatches && existingMatches.length > 0) {
         match = existingMatches[0]
-        console.log('Updating existing match:', match.id)
+        // Figure out which order the teams are in the fixture
+        isTeam0First = match.team1_id === team0Id
+        console.log('Updating existing match:', match.id, 'isTeam0First:', isTeam0First)
         
         // Delete existing stats
         const { error: deleteStatsError } = await supabase.from('player_stats').delete().eq('match_id', match.id)
@@ -1794,13 +1794,15 @@ function LeafStatsUpload({ teams, onSuccess, showDivisionSelect = true, availabl
         console.log('Match updated successfully')
       } else {
         console.log('No existing fixture found - creating new match')
+        // When creating new, team0 is always team1
+        isTeam0First = true
         const insertData = {
           division: uploadDivision,
           week,
-          team1_id: sortedIds[0],
-          team2_id: sortedIds[1],
-          team1_maps: isTeam0First ? preview.team0Wins : preview.team1Wins,
-          team2_maps: isTeam0First ? preview.team1Wins : preview.team0Wins,
+          team1_id: team0Id,
+          team2_id: team1Id,
+          team1_maps: preview.team0Wins,
+          team2_maps: preview.team1Wins,
           admin_approved: true,
         }
         console.log('Inserting new match:', insertData)
