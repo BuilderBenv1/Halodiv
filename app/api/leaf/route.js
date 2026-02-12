@@ -170,30 +170,23 @@ function mergeSplitGames(games) {
           mergedGames.push(...gamesGroup)
         }
       } else if (isOddball) {
-        // For Oddball, a complete game requires one team to reach 2 rounds
-        // If no game has a team at 2, they're split games that need merging
-        const completeGames = gamesGroup.filter(g => 
-          g.winnerScore >= 2 || g.loserScore >= 2
-        )
-        const incompleteGames = gamesGroup.filter(g => 
-          g.winnerScore < 2 && g.loserScore < 2 && (g.winnerScore > 0 || g.loserScore > 0)
-        )
+        // For Oddball, check if games need merging
+        // Leaf reports various score formats - we detect incomplete games by:
+        // 1. Having multiple games on same map+variant
+        // 2. Neither team has a clearly "complete" score
         
-        // Keep complete games as-is
-        mergedGames.push(...completeGames)
-        
-        // Merge incomplete games if we have exactly 2
-        if (incompleteGames.length === 2) {
-          const merged = mergeGameStats(incompleteGames)
+        // If we have exactly 2 Oddball games on same map, likely a restart - merge them
+        if (gamesGroup.length === 2) {
+          const merged = mergeOddballGames(gamesGroup)
           mergedGames.push(merged)
-        } else if (incompleteGames.length > 2) {
-          // More than 2 incomplete games - try to pair them
-          // For now, merge all into one
-          const merged = mergeGameStats(incompleteGames)
+        } else if (gamesGroup.length > 2) {
+          // More than 2 - try to figure out which are complete
+          // For now, merge all of them
+          const merged = mergeOddballGames(gamesGroup)
           mergedGames.push(merged)
-        } else if (incompleteGames.length === 1) {
-          // Single incomplete game - keep it (might be a real short game)
-          mergedGames.push(incompleteGames[0])
+        } else {
+          // Single game, keep as-is
+          mergedGames.push(gamesGroup[0])
         }
       } else {
         // For other objective modes (CTF, Strongholds, KotH), check for 0-0 games (restarts)
@@ -304,6 +297,98 @@ function mergeGameStats(games) {
     base.winnerScore = teamAScore
     base.loserScore = teamBScore
   }
+  
+  // Sum durations
+  const totalSeconds = games.reduce((sum, g) => {
+    const parts = g.duration.split(':')
+    return sum + (parseInt(parts[0]) * 60) + parseInt(parts[1])
+  }, 0)
+  base.duration = `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`
+  
+  return base
+}
+
+function mergeOddballGames(games) {
+  // Merge multiple Oddball game fragments into one
+  // Need to track scores by team across fragments
+  const base = { ...games[0] }
+  
+  // Combine match IDs
+  base.matchId = games.map(g => g.matchId).join('_merged_')
+  
+  // For Oddball, we need to track which team got which points
+  // The winningGamertags from game 0 define "Team A"
+  const teamAGamertags = games[0].winningGamertags.map(g => g.toLowerCase())
+  
+  let teamAPoints = 0
+  let teamBPoints = 0
+  
+  games.forEach(g => {
+    // Check if the winners of this fragment are Team A
+    const fragmentWinnersAreTeamA = g.winningGamertags.some(gt => 
+      teamAGamertags.includes(gt.toLowerCase())
+    )
+    
+    if (fragmentWinnersAreTeamA) {
+      teamAPoints += g.winnerScore
+      teamBPoints += g.loserScore
+    } else {
+      teamAPoints += g.loserScore
+      teamBPoints += g.winnerScore
+    }
+  })
+  
+  // Build merged player stats
+  const playerStatsMap = {}
+  
+  games.forEach(game => {
+    game.players.forEach(player => {
+      const key = player.gamertag.toLowerCase()
+      if (!playerStatsMap[key]) {
+        playerStatsMap[key] = {
+          gamertag: player.gamertag,
+          won: false, // Will set after determining winner
+          kills: 0,
+          deaths: 0,
+          assists: 0,
+          damage: 0,
+          damageTaken: 0,
+          shotsFired: 0,
+          shotsLanded: 0,
+        }
+      }
+      playerStatsMap[key].kills += player.kills
+      playerStatsMap[key].deaths += player.deaths
+      playerStatsMap[key].assists += player.assists
+      playerStatsMap[key].damage += player.damage
+      playerStatsMap[key].damageTaken += player.damageTaken
+      playerStatsMap[key].shotsFired += player.shotsFired
+      playerStatsMap[key].shotsLanded += player.shotsLanded
+    })
+  })
+  
+  // Determine winner - whoever has more points
+  const teamAWon = teamAPoints >= teamBPoints
+  
+  if (teamAWon) {
+    base.winnerScore = teamAPoints
+    base.loserScore = teamBPoints
+    base.winningGamertags = games[0].winningGamertags
+    base.losingGamertags = games[0].losingGamertags
+  } else {
+    base.winnerScore = teamBPoints
+    base.loserScore = teamAPoints
+    base.winningGamertags = games[0].losingGamertags
+    base.losingGamertags = games[0].winningGamertags
+  }
+  
+  // Set won status for players
+  const winnerGTs = base.winningGamertags.map(g => g.toLowerCase())
+  Object.values(playerStatsMap).forEach(p => {
+    p.won = winnerGTs.includes(p.gamertag.toLowerCase())
+  })
+  
+  base.players = Object.values(playerStatsMap)
   
   // Sum durations
   const totalSeconds = games.reduce((sum, g) => {
